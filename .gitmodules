@@ -1,0 +1,9 @@
+[submodule "src/3rd-party/asmjit"]
+	path = src/3rd-party/asmjit
+	url = https://github.com/apriorit/asmjit.git
+[submodule "src/3rd-party/rewolf-wow64ext"]
+	path = src/3rd-party/rewolf-wow64ext
+	url = https://github.com/apriorit/rewolf-wow64ext.git
+[submodule "src/3rd-party/diana-dasm"]
+	path = src/3rd-party/diana-dasm
+	url = https://github.com/apriorit/diana-dasm.git

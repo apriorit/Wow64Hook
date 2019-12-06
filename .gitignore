@@ -1,0 +1,10 @@
+/bin
+/build
+/install
+/include
+/lib
+/src/.vs
+/.scannerwork
+/.vs
+*.tlog
+*.user
