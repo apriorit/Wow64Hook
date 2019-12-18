@@ -2,29 +2,17 @@
 #include "HookGenerator.h"
 
 #define OPCODE(op) op
-using namespace asmjit;
 
 namespace
 {
-    std::string g_hookMessage = "Hello from 64-bit Wow64 hook handler";
+    const char* g_hookMessage = "Hello from hooked 64-bit NtWriteVirtualMemory function\n";
     ULONG64 g_ioStatusBlock = 0;
 }
 
 namespace Wow64Hooker
 {
-    HookHandler64 HookGenerator::generateHookHandler(DWORD64 writeFileFuncAddr)
+    void ShellCode64Generator::generate(X86Assembler& assembler, DWORD64 writeFileFuncAddr)
     {
-        // Runtime specialized for JIT code execution
-        JitRuntime runtime;
-        // Holds code and relocation information
-        CodeHolder code;
-        // Initialize to the same arch as JIT runtime
-        code.init(runtime.getCodeInfo());
-        // Create and attach X86Assembler to code
-        X86Assembler assembler(&code);
-
-        assembler.int3();
-
         // save stack pointer
         assembler.push(x86::rbp);
         assembler.mov(x86::rbp, x86::rsp);
@@ -42,8 +30,8 @@ namespace Wow64Hooker
         assembler.mov(x86::r9, 0);                                          // ApcContext
         assembler.push(0);                                                  // Key
         assembler.push(0);                                                  // ByteOffset
-        assembler.push(g_hookMessage.size());                               // Length
-        assembler.push(reinterpret_cast<uint64_t>(g_hookMessage.c_str()));  // Buffer
+        assembler.push(strlen(g_hookMessage));                              // Length
+        assembler.push(reinterpret_cast<uint64_t>(g_hookMessage));          // Buffer
         assembler.push(reinterpret_cast<uint64_t>(&g_ioStatusBlock));       // IoStatusBlock
 
         // align stack
@@ -58,29 +46,54 @@ namespace Wow64Hooker
         assembler.mov(x86::rsp, x86::rbp);
         assembler.pop(x86::rbp);
 
-        assembler.int3();
+        assembler.ret();
+    }
+
+    void ShellCode64Generator::generate(X86Assembler& assembler, const HookHandler32* hookHandler32)
+    {
+        // Label uses to adjust mode after returning from hookHandler32
+        Label lBackFromAlert = assembler.newLabel();
+
+        // prepare retaddress to return from hookHandler32
+        assembler.sub(x86::esp, 0x04);
+        assembler.lea(x86::eax, x86::ptr(lBackFromAlert));
+        assembler.mov(x86::dword_ptr(x86::rsp), x86::eax);
+
+        // specify x86 code segment
+        const uint32_t x86CodeSegment = 0x23;
+        assembler.mov(x86::rax, x86CodeSegment);
+
+        // prepare hookHandler32 address for calling
+        const uint32_t sizeToShift = 0x20;
+        assembler.shl(x86::rax, sizeToShift);
+        assembler.push(x86::rax);
+        assembler.mov(x86::eax, x86::dword_ptr(reinterpret_cast<uint64_t>(hookHandler32)));
+        assembler.mov(x86::dword_ptr(x86::rsp), x86::eax);
+
+        // generate retf instruction to switch to x86
+        assembler.db(OPCODE(0xCB));
+
+        // begin of code after return from hookHandler32
+        assembler.bind(lBackFromAlert);
+
+        // switch back to x64 mode
+        assembler.db(OPCODE(0x6A)); // push
+        assembler.db(OPCODE(0x33)); // x64 code segment
+        assembler.db(OPCODE(0xE8)); // call (current_addr + 5)
+        assembler.db(OPCODE(0x00));
+        assembler.db(OPCODE(0x00));
+        assembler.db(OPCODE(0x00));
+        assembler.db(OPCODE(0x00));
+        assembler.db(OPCODE(0x83)); // add
+        assembler.db(OPCODE(0x04)); // dword
+        assembler.db(OPCODE(0x24)); // [esp]
+        assembler.db(OPCODE(0x05)); // 0x05
+        assembler.db(OPCODE(0xCB)); // retf
 
         assembler.ret();
-
-        HookHandler64 hookHandler;
-        // Add the generated code to the runtime
-        Error error = runtime.add(&hookHandler, &code);
-
-        if (kErrorOk != error)
-        {
-            return nullptr;
-        }
-
-        return copyHookHandler(hookHandler, code.getCodeSize());
     }
 
-    HookHandler64 HookGenerator::generateHookHandler(const HookHandler32* hookHandler32)
-    {
-        HookHandler64 h;
-        return h;
-    }
-
-    HookHandler64 HookGenerator::copyHookHandler(HookHandler64 hookHandler, size_t size)
+    ShellcodeHandler64 ShellCode64Generator::copyHookHandler(ShellcodeHandler64 hookHandlerOrig, size_t size)
     {
         //
         // need to copy generated handler to avoid 
@@ -97,8 +110,8 @@ namespace Wow64Hooker
             return nullptr;
         }
 
-        HookHandler64 hookHandlerCopy = reinterpret_cast<HookHandler64>(address);
-        memcpy(hookHandlerCopy, hookHandler, size);
+        ShellcodeHandler64 hookHandlerCopy = reinterpret_cast<ShellcodeHandler64>(address);
+        memcpy(hookHandlerCopy, hookHandlerOrig, size);
 
         return hookHandlerCopy;
     }

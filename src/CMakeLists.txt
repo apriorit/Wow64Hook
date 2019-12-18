@@ -36,30 +36,39 @@ include_directories(3rd-party/diana-dasm/src/diana_core/diana_core/diana_patcher
 include_directories(3rd-party/rewolf-wow64ext/src)
 include_directories(3rd-party/asmjit/src/asmjit)
 
-add_executable(
-    hooker
-	hooker/StdAfx.h
-	hooker/StdAfx.cpp
-	hooker/MemoryStream.h
-	hooker/MemoryStream.cpp
-	hooker/MemoryProvider.h
-	hooker/MemoryProvider.cpp
-	hooker/IMemoryReaderWriter.h
-	hooker/Wow64MemoryReaderWriter.h
-	hooker/Wow64MemoryReaderWriter.cpp
-	hooker/DianaHook.h
-	hooker/DianaHook.cpp
-	hooker/Hooker.h
-	hooker/Hooker.cpp
-	hooker/HookGenerator.h
-	hooker/HookGenerator.cpp
-	hooker/Main.cpp
+add_library(
+    DianaHook
+    DianaHook/IMemoryReaderWriter.h
+    DianaHook/MemoryStream.h
+    DianaHook/MemoryStream.cpp
+    DianaHook/MemoryProvider.h
+    DianaHook/MemoryProvider.cpp
+    DianaHook/DianaHook.h
+    DianaHook/DianaHook.cpp
+    DianaHook/StdAfx.h
+    DianaHook/StdAfx.cpp
 )
-set_target_properties(hooker PROPERTIES COMPILE_FLAGS "/YuStdAfx.h")
-set_source_files_properties(hooker/StdAfx.cpp PROPERTIES COMPILE_FLAGS "/YcStdAfx.h")
-target_link_libraries(hooker wow64ext diana asmjit)
+set_target_properties(DianaHook PROPERTIES COMPILE_FLAGS "/YuStdAfx.h")
+set_source_files_properties(DianaHook/StdAfx.cpp PROPERTIES COMPILE_FLAGS "/YcStdAfx.h")
+target_link_libraries(DianaHook diana)
+
+add_executable(
+    Hooker
+	Hooker/StdAfx.h
+	Hooker/StdAfx.cpp
+	Hooker/Wow64MemoryReaderWriter.h
+	Hooker/Wow64MemoryReaderWriter.cpp
+	Hooker/Hooker.h
+	Hooker/Hooker.cpp
+	Hooker/HookGenerator.h
+	Hooker/HookGenerator.cpp
+	Hooker/Main.cpp
+)
+set_target_properties(Hooker PROPERTIES COMPILE_FLAGS "/YuStdAfx.h")
+set_source_files_properties(Hooker/StdAfx.cpp PROPERTIES COMPILE_FLAGS "/YcStdAfx.h")
+target_link_libraries(Hooker DianaHook wow64ext asmjit)
 
 install(
-    TARGETS hooker wow64ext diana
+    TARGETS Hooker DianaHook wow64ext asmjit diana
     DESTINATION "${CMAKE_SOURCE_DIR}/../bin"
 )

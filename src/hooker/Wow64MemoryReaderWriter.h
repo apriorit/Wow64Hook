@@ -1,5 +1,5 @@
 #pragma once
-#include "IMemoryReaderWriter.h"
+#include "DianaHook/IMemoryReaderWriter.h"
 
 namespace Wow64Hooker
 {

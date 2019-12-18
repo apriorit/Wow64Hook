@@ -3,12 +3,25 @@
 
 namespace Wow64Hooker
 {
-    Hooker::Hooker(HookHandler32 hookHandler32)
-        : m_hookHandler32(hookHandler32)
-        , m_dianaHook(m_wow64ReaderWriter, Hooker::hook_Alloc, Hooker::hook_Free)
+    HookContext::HookContext(DWORD64 funcToHookAddr, ShellcodeHandler64 hookHandler64)
+        : funcToHookAddr(funcToHookAddr)
+        , hookHandler64(hookHandler64)
+    {
+    }
+
+    Hooker::Hooker(const HookHandler32* hookHandler32)
+        : m_dianaHook(m_wow64ReaderWriter, Hooker::hook_Alloc, Hooker::hook_Free)
     {
         DWORD64 ntdllAddr = GetModuleHandle64(L"ntdll.dll");
-        m_hookContexts.push_back(generateHookContextForNtProtect(ntdllAddr));
+        if (!ntdllAddr)
+        {
+            throw std::runtime_error("Can't get 64-bit ntdll address");
+        }
+
+        DWORD64 funcToCallAddr = getFunctionAddress64(ntdllAddr, "ZwWriteFile");
+
+        m_hookContexts.push_back(generateHookContext(ntdllAddr, "NtReadVirtualMemory", hookHandler32));
+        m_hookContexts.push_back(generateHookContext(ntdllAddr, "NtWriteVirtualMemory", funcToCallAddr));
     }
 
     void Hooker::applyHooks()
@@ -25,25 +38,6 @@ namespace Wow64Hooker
             changeRWEProtection(hookContext.funcToHookAddr, false);
         }
     }
-
-    HookContext Hooker::generateHookContextForNtProtect(DWORD64 ntdllAddr)
-    {
-        DWORD64 ntAllocateFuncAddr = GetProcAddress64(ntdllAddr, "NtAllocateVirtualMemory"); // change function
-        DWORD64 zwWriteFileAddr = GetProcAddress64(ntdllAddr, "ZwWriteFile");
-
-        auto hookHandler64 = m_hookGenerator.generateHookHandler(zwWriteFileAddr);
-        if (nullptr == hookHandler64)
-        {
-            throw std::runtime_error("Can't apply Wow64 hooks");
-        }
-
-        return HookContext(ntAllocateFuncAddr, hookHandler64);
-    }
-
-    //HookContext Hooker::generateHookContextForNtAllocate(DWORD64 ntdllAddr)
-    //{
-    //    DWORD64 ntProtectFuncAddr = GetProcAddress64(ntdllAddr, "NtProtectVirtualMemory");
-    //}
 
     void Hooker::changeRWEProtection(DWORD64 addr, bool needSetRWE)
     {
@@ -71,6 +65,21 @@ namespace Wow64Hooker
         {
             throw std::runtime_error("Can't change RWE protection");
         }
+    }
+
+    DWORD64 Hooker::getFunctionAddress64(DWORD64 moduleAddr, char* funcName)
+    {
+        DWORD64 funcAddr = GetProcAddress64(moduleAddr, funcName);
+
+        if (!funcAddr)
+        {
+            std::stringstream ss;
+            ss << "Can't get 64-bit " << funcName << " function address";
+
+            throw std::runtime_error(ss.str());
+        }
+
+        return funcAddr;
     }
 
     int Hooker::hook_Alloc(void* pThis,

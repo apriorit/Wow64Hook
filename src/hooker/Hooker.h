@@ -1,33 +1,42 @@
 #pragma once
 #include "Wow64MemoryReaderWriter.h"
 #include "HookGenerator.h"
-#include "DianaHook.h"
+#include "DianaHook/DianaHook.h"
 
 namespace Wow64Hooker
 {
     struct HookContext
     {
-        HookContext(DWORD64 funcToHookAddr, HookHandler64 hookHandler64)
-            : funcToHookAddr(funcToHookAddr)
-            , hookHandler64(hookHandler64)
-        {
-        }
+        HookContext(DWORD64 funcToHookAddr, ShellcodeHandler64 hookHandler64);
 
-        DWORD64 funcToHookAddr = 0;
-        HookHandler64 hookHandler64 = nullptr;
+        DWORD64 funcToHookAddr;
+        ShellcodeHandler64 hookHandler64;
     };
 
     class Hooker
     {
     public:
-        Hooker(HookHandler32 onAlertCb);
+        explicit Hooker(const HookHandler32* onAlertCb);
         void applyHooks();
 
     private:
-        void changeRWEProtection(DWORD64 addr, bool needSetRWE);
+        template<typename Type>
+        HookContext generateHookContext(DWORD64 moduleAddr, char* funcName, Type addr)
+        {
+            DWORD64 funcToHookAddr = getFunctionAddress64(moduleAddr, funcName);
 
-        HookContext generateHookContextForNtProtect(DWORD64 ntdllAddr);
-        HookContext generateHookContextForNtAllocate(DWORD64 ntdllAddr);
+            ShellcodeHandler64 hookHandler64 = m_hookGenerator.generateShellcodeHandler64(addr);
+            if (!hookHandler64)
+            {
+                throw std::runtime_error("Can't generate hook handler");
+            }
+
+            return HookContext(funcToHookAddr, hookHandler64);
+        }
+
+    private:
+        void changeRWEProtection(DWORD64 addr, bool needSetRWE);
+        DWORD64 getFunctionAddress64(DWORD64 moduleAddr, char* funcName);
 
         static int hook_Alloc(void* pThis,
             OPERAND_SIZE size,
@@ -38,13 +47,11 @@ namespace Wow64Hooker
         static void hook_Free(void* pThis, const OPERAND_SIZE* pAddress);
 
     private:
-        std::vector<HookContext> m_hookContexts;
-        HookHandler32 m_hookHandler32 = nullptr;
-        DWORD m_oldProtect = 0;
-
-        HookGenerator m_hookGenerator;
-
-        Wow64MemoryReaderWriter m_wow64ReaderWriter;
         DianaHook::DianaHookPatcher m_dianaHook;
+        Wow64MemoryReaderWriter m_wow64ReaderWriter;
+        ShellCode64Generator m_hookGenerator;
+
+        std::vector<HookContext> m_hookContexts;
+        DWORD m_oldProtect = 0;
     };
 }

@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <exception>
 #include <vector>
-#include <memory>
+#include <sstream> 
 
 // to avoid linkage warnings
 #define WOW64EXT_EXPORTS
